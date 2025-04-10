@@ -1,7 +1,7 @@
 {
   "name": "@jadejr/connect-session-kysely",
   "description": "A kysely session store for Express and Connect",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "exports": {
     ".": {
