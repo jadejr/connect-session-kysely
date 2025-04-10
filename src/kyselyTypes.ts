@@ -6,8 +6,8 @@ export interface Database {
 
 export interface SessionTable {
   sid: ColumnType<string, string, never>;
-  sess: JSONColumnType<any>;
-  expired: ColumnType<Date, Date | string, Date | string>;
+  sess: JSONColumnType<object>;
+  expired: ColumnType<string, Date | string, Date | string>;
 }
 
 export type Session = Selectable<SessionTable>;
