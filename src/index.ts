@@ -1,8 +1,8 @@
-import { Kysely, sql } from 'kysely';
+import { Kysely } from 'kysely';
 import { SessionData, Store } from 'express-session';
 
 import { Database } from './kyselyTypes.js';
-import { DbType, getFastQueryIfExists, timestampTypeName, expiredCondition } from './utils.js';
+import { DbType, getFastQueryIfExists } from './utils.js';
 
 export interface Options {
   cleanupInterval: number; // 0 disables
@@ -14,7 +14,7 @@ export interface Options {
 
 export class ConnectSessionKyselyStore extends Store {
   #kysely: Kysely<Database>;
-  #ready: Promise<unknown>; // Schema created
+  #ready: Promise<unknown>;
   nextDbCleanup: NodeJS.Timeout | undefined;
   options: Options;
 
@@ -50,13 +50,13 @@ export class ConnectSessionKyselyStore extends Store {
   async get(sid: string, callback?: (err: Error | null, session?: SessionData | null) => void) {
     try {
       await this.#ready;
-      const { dbType, tableName, sidFieldName } = this.options;
+      const { tableName, sidFieldName } = this.options;
 
       const response = await this.#kysely
         .selectFrom(tableName as 'sessions')
         .select('sess')
         .where(sidFieldName as 'sid', '=', sid)
-        .where(expiredCondition(dbType, new Date().toISOString()))
+        .where('expired', '>=', new Date().toISOString())
         .executeTakeFirst();
 
       let session: SessionData | null = null;
@@ -130,13 +130,13 @@ export class ConnectSessionKyselyStore extends Store {
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   async touch(sid: string, session: SessionData, callback?: () => void) {
     await this.#ready;
-    const { dbType, tableName, sidFieldName } = this.options;
+    const { tableName, sidFieldName } = this.options;
 
     if (session.cookie && session.cookie.expires) {
       await this.#kysely
         .updateTable(tableName as 'sessions')
         .where(sidFieldName as 'sid', '=', sid)
-        .where(expiredCondition(dbType, new Date().toISOString()))
+        .where('expired', '>=', new Date().toISOString())
         .set({
           expired: new Date(session.cookie.expires).toISOString(),
         })
@@ -204,12 +204,12 @@ export class ConnectSessionKyselyStore extends Store {
   async all(callback?: (err?: Error | null, obj?: SessionData[] | { [sid: string]: SessionData } | null) => void) {
     try {
       await this.#ready;
-      const { dbType, tableName } = this.options;
+      const { tableName } = this.options;
 
       const rows = await this.#kysely
         .selectFrom(tableName as 'sessions')
         .select('sess')
-        .where(expiredCondition(dbType, new Date().toISOString()))
+        .where('expired', '>=', new Date().toISOString())
         .execute();
 
       const sessions = rows.map((row) => {
@@ -228,17 +228,12 @@ export class ConnectSessionKyselyStore extends Store {
   }
 
   private async dbCleanup() {
-    const { cleanupInterval, dbType, tableName, onDbCleanupError } = this.options;
+    const { cleanupInterval, tableName, onDbCleanupError } = this.options;
 
     try {
-      const condition =
-        dbType === 'sqlite'
-          ? sql<boolean>`datetime(${new Date().toISOString()}) < datetime(expired)`
-          : sql<boolean>`CAST(${new Date().toISOString()} as ${sql.raw(timestampTypeName(dbType))}) < expired`;
-
       await this.#kysely
         .deleteFrom(tableName as 'sessions')
-        .where(condition)
+        .where('expired', '<', new Date().toISOString())
         .execute();
     } catch (err: unknown) {
       onDbCleanupError?.(err);

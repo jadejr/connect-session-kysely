@@ -45,18 +45,6 @@ export function getFastQueryIfExists(
   }
 }
 
-export function timestampTypeName(dbType: DbType) {
-  return dbType === 'mysql' ? 'DATETIME' : dbType === 'postgresql' ? 'timestamp with time zone' : 'timestamp';
-}
-
-export function expiredCondition(dbType: DbType, date: string): RawBuilder<boolean> {
-  if (dbType === 'sqlite') {
-    return sql<boolean>`datetime(${date}) <= datetime(expired)`;
-  } else {
-    return sql<boolean>`CAST(${date} as ${sql.raw(timestampTypeName(dbType))}) <= expired`;
-  }
-}
-
 // this is a workaround until kysely supporrts CREATE TABLE IF NOT EXISTS
 async function checkForTable(kysely: Kysely<Database>, dbType: DbType, tableName: string) {
   const result = await kysely.introspection
